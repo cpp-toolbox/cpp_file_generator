@@ -11,20 +11,57 @@ def print_directories(start_dir):
         print(f"[{i}] {root}")
     return dirs
 
-def select_directory(start_dir):
-    """Prompt user to select a directory."""
-    dirs = print_directories(start_dir)
-    choice = input("Enter the directory number to create files (or 'new' to create a new parent folder): ")
-    if choice.lower() == 'new':
-        new_folder = input("Enter the new folder name: ")
-        selected_dir = Path(start_dir) / new_folder
-        selected_dir.mkdir(exist_ok=True)
-    else:
-        selected_dir = Path(dirs[int(choice)])
-    return selected_dir
+
+def select_directory(root_path: Path) -> str:
+    """Navigate directories interactively and return the selected directory path."""
+    current_path = os.path.abspath(root_path)
+
+    while True:
+        # Get directories in the current path
+        dirs = [d for d in os.listdir(current_path) if os.path.isdir(os.path.join(current_path, d))]
+        dirs.sort()
+
+        # Display current path and available directories
+        print(f"\nCurrent Directory: {current_path}\n")
+        for i, directory in enumerate(dirs):
+            print(f"{i}: {directory}")
+
+        print("\nOptions:")
+        print("  - Enter a number to navigate into a directory.")
+        print("  - Type 'b' to go back.")
+        print("  - Type 'n' to create a new directory.")
+        print("  - Press Enter to select this directory.")
+
+        choice = input("\nChoice: ").strip()
+
+        if choice == "":
+            return current_path  # User confirms selection
+
+        elif choice.lower() == "b":
+            parent_path = os.path.dirname(current_path)
+            if parent_path != current_path:  # Prevent going above root
+                current_path = parent_path
+
+        elif choice.lower() == "n":
+            new_dir_name = input("Enter new directory name: ").strip()
+            if new_dir_name:
+                new_dir_path = os.path.join(current_path, new_dir_name)
+                try:
+                    os.makedirs(new_dir_path, exist_ok=True)
+                    print(f"Directory '{new_dir_name}' created.")
+                except Exception as e:
+                    print(f"Error creating directory: {e}")
+
+        elif choice.isdigit():
+            index = int(choice)
+            if 0 <= index < len(dirs):
+                current_path = os.path.join(current_path, dirs[index])
+
+        else:
+            print("Invalid choice, please try again.")
 
 def to_camel_case(name):
-    """Convert an underscore-separated string to CamelCase."""
+    """Convert an underscore_separated string to CamelCase."""
     return ''.join(word.capitalize() for word in name.split('_'))
 
 def create_header_and_source_files(filename, directory, create_class=False, create_template=False):
@@ -56,6 +93,26 @@ def create_header_and_source_files(filename, directory, create_class=False, crea
 
     print(f"Files '{header_file}', '{source_file}'" + (f", and '{template_file}'" if create_template else "") + " have been generated.")
 
+def get_filename_from_directory(directory: Path) -> str:
+    """
+    Ask the user if they want to use the last part of the selected directory as the filename.
+    If not, allow them to enter a filename manually.
+    
+    :param directory: The selected directory path.
+    :return: The filename without an extension.
+    """
+    suggested_filename = directory.name  # Last part of the directory path
+    user_input = input(f"Use '{suggested_filename}' as the filename? (y/n): ").strip().lower()
+
+    if user_input == 'y':
+        return suggested_filename
+    else:
+        while True:
+            custom_filename = input("Enter the desired filename (without extension): ").strip()
+            if custom_filename:
+                return custom_filename
+            print("Filename cannot be empty. Please try again.")
+
 def main():
     parser = argparse.ArgumentParser(description="C++ File Generator with Class and Template Support")
     parser.add_argument("source_dir", help="Source directory where files should be generated")
@@ -65,8 +122,8 @@ def main():
     args = parser.parse_args()
 
     directory = Path(args.source_dir)
-    filename = input("Enter the filename (without extension): ")
-    directory = select_directory(directory)  # Pass the source directory argument to the selection function
+    directory = Path(select_directory(directory))  # Pass the source directory argument to the selection function
+    filename = get_filename_from_directory(directory)
     create_header_and_source_files(filename, directory, create_class=args.create_class, create_template=args.create_template)
 
 if __name__ == "__main__":
